@@ -1,0 +1,11 @@
+# Dependencies and generated PCF build artifacts
+Account.pcf/node_modules/
+Account.pcf/out/
+Account.pcf/obj/
+Account.pcf/bin/
+Account.pcf/AgristabilityProgramSummary/generated/
+*.binlog
+
+# IDE and OS files
+.vs/
+.DS_Store

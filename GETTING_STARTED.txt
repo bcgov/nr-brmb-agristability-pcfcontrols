@@ -1,0 +1,116 @@
+Agristability Program Summary PCF - Getting Started
+====================================================
+
+Prerequisites
+-------------
+- Node.js 18+ and npm (install from https://nodejs.org/)
+- Power Platform CLI (`pac`)
+    winget install Microsoft.PowerPlatformCLI
+    (or install the "Power Platform Tools" VS Code extension)
+- Access to your Dataverse dev environment
+
+Restore the project
+-------------------
+1. Copy this folder to your working location (e.g. C:\agristability\nr-brmb-agristability-pcfcontrols).
+2. Open a PowerShell prompt.
+3. Change into the project folder:
+       cd C:\agristability\nr-brmb-agristability-pcfcontrols\Account.pcf
+4. Install dependencies (recreates node_modules):
+       npm install
+5. Build the control:
+       npm run build
+
+If the build succeeds, the compiled bundle appears under Account.pcf\out\.
+
+Authenticate to Dataverse
+-------------------------
+Check who you are currently signed in as:
+    pac auth who
+
+If you need to sign in (or switch tenants):
+    pac auth clear                     # optional: wipe existing profile
+    pac auth create                    # opens browser to sign in
+
+Optionally target a specific environment when signing in:
+    pac auth create --environment <envUrlOrId>
+
+Push the control to your dev environment
+----------------------------------------
+From inside the Account.pcf folder:
+    pac pcf push --publisher-prefix <yourPrefix>
+
+- Replace <yourPrefix> with your Dataverse publisher prefix
+  (for example: vsi, brmb, etc.).
+- On first push, pac creates an unmanaged solution called
+  PowerAppsTools_<prefix> and imports the control into it.
+- Subsequent pushes just update the same control.
+- If you get a version conflict, either bump the version in
+  Account.pcf\AgristabilityProgramSummary\ControlManifest.Input.xml
+  or add --force.
+
+Add the control to an Account form
+----------------------------------
+1. Open https://make.powerapps.com (in the same environment you pushed to).
+2. Tables > Account > Forms > open the main form.
+3. Add or select any Single Line Text column on the form
+   (Account Name works fine - the value isn't used).
+4. In the right pane, choose Components > + Component and pick
+   "AgristabilityProgramSummary" (namespace BRMB).
+5. Property settings:
+     boundField     -> defaults to the field you attached it to. Leave it.
+     testAccountId  -> LEAVE BLANK in the real form (only used by the
+                       local PCF test harness).
+6. Enable Web (Mobile/Tablet optional).
+7. Save + Publish.
+8. Open an Account record - the control replaces the field.
+
+Iterating on the control
+------------------------
+Fast in-browser refresh (no push required after first push):
+1. Open the account form, hit F12 (dev tools) > Network tab.
+2. Filter for "bundle.js" and locate the request for
+   BRMB.AgristabilityProgramSummary/bundle.js.
+3. Right-click the request > "Override content" (accept the folder prompt).
+4. Under Sources > Overrides, replace that overridden bundle.js with
+   Account.pcf\out\controls\AgristabilityProgramSummary\bundle.js
+   after every "npm run build".
+5. Hard-refresh the form (Ctrl+F5).
+
+To do a proper checkpoint push instead:
+    npm run build
+    pac pcf push --publisher-prefix <yourPrefix>
+
+Test harness (limited - Dataverse WebAPI is mocked)
+---------------------------------------------------
+    cd Account.pcf
+    npm start watch
+Open the harness, put any string in "boundField" and (optionally)
+a real account GUID in "testAccountId". Note that live enrolment/benefit
+data usually won't return in the harness because webAPI is stubbed;
+push to dev for real data.
+
+Dev account for testing
+-----------------------
+  cebff3fc-0708-ef11-9f89-000d3a0c65e4    (BC dev)
+
+Files worth knowing
+-------------------
+- Account.pcf\AgristabilityProgramSummary\ControlManifest.Input.xml
+    control namespace, bound field, testAccountId prop, WebAPI feature.
+- Account.pcf\AgristabilityProgramSummary\index.ts
+    class that reads account context and calls the Dataverse WebAPI.
+- Account.pcf\AgristabilityProgramSummary\ProgramSummary.tsx
+    React component: program-year dropdown + 4 benefit slot cards.
+- Account.pcf\package.json
+    Pinned deps: @fluentui/react-components 9.46.2 (matches the
+    platform-library version in ControlManifest.Input.xml).
+
+Do NOT commit / copy these (regenerable)
+----------------------------------------
+    node_modules/
+    out/
+    obj/
+    AgristabilityProgramSummary/generated/
+    *.binlog
+
+The .gitignore inside Account.pcf already excludes them.

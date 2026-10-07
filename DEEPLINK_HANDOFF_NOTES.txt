@@ -1,0 +1,65 @@
+Deep Link Handoff Notes
+=======================
+
+Problem
+-------
+The PCF opens the enrolment code app using the Power Apps player URL. The outer player URL can contain a route/hash, for example:
+
+  https://apps.powerapps.com/play/...#/enrolment/dashboard/<enrolment-guid>
+
+However, the embedded app runs in a separate runtime-proxy frame, with a URL shaped like:
+
+  https://<environment>.environment.api.powerplatformusercontent.com/powerapps/appruntime/.../runtimeproxy/.../index.html#/dashboard-home
+
+Observed behavior:
+- In the DevTools top/player frame, the requested enrolment hash is present.
+- In the fullscreen-app/runtime-proxy frame, window.location.pathname is the runtime-proxy index.html path, window.location.hash is #/dashboard-home, and enrolmentId/route query parameters are null.
+- Manually setting window.location.hash to #/enrolment/dashboard/<enrolment-guid> in the runtime-proxy frame navigates to the enrolment details page.
+
+Conclusion
+----------
+The app route and router work. The Power Apps player is not forwarding the custom query/hash from its outer URL into the runtime-proxy app frame. This is not fixed by adding more URL parameter aliases or changing route parsing alone.
+
+The enrolment app currently uses HashRouter, has routes for /enrolment/:source/:enrolmentId, and normalizeInitialDeepLink() parses route/page/id parameters. It defaults to #/dashboard-home when no route arrives. Its pendingDeepLinkRoute localStorage mechanism is not a PCF-to-app bridge: localStorage is scoped by origin, and the PCF and runtime-proxy app run on different origins. It only applies when the writer and reader can access the same origin storage.
+
+Recommended reusable solution
+-----------------------------
+Use one shared, generic Dataverse deep-link request table for the enrolment app and the planned third app. Avoid app-specific one-off workarounds.
+
+Suggested fields:
+- Requester: Dataverse user lookup / record owner
+- Target app key: stable text or choice value, e.g. Enrolment or Benefit
+- Target record ID: text GUID
+- Route key or route type: app-understood destination identifier
+- Status: Pending / Consumed (or equivalent)
+- Expires On: short lifetime
+- Created On: Dataverse system field
+
+Flow:
+1. The PCF creates a pending request for the current user, target app, target record, and route.
+2. The PCF launches the ordinary Power Apps player URL. The URL no longer needs to carry the record ID.
+3. On startup, the target app queries for the current user's newest pending, unexpired request for its own app key.
+4. The app claims/consumes that request and translates its route/record ID into its own HashRouter path.
+5. Expired requests are ignored and can be cleaned up periodically.
+
+Security and reliability notes:
+- Use the Dataverse authenticated user/owner as requester; do not trust an arbitrary user ID supplied by the caller.
+- Give the PCF user create/read permissions limited to their own requests; give each app permission to read/consume the appropriate user's requests.
+- For production concurrency, prefer a custom API that atomically claims one pending request. A simple query-then-update can allow two app tabs to claim the same request.
+- Keep the request short-lived and single-use; avoid putting sensitive data in the route payload.
+- Check for an existing suitable table/custom API before creating a new table.
+
+Current code/debug state
+------------------------
+- The PCF currently appends `screen=enrolment`, `enrolmentId=<GUID>`, and `#/enrolment/dashboard/<GUID>` to the app player URL. The player does not forward these into the runtime-proxy frame.
+- The enrolment app deepLinks.ts has temporary console.debug statements. Remove them after troubleshooting.
+- The PCF-side localStorage and enrolment-app localStorage cannot bridge the cross-origin player/runtime boundary.
+- Direct runtime-proxy links may contain generated runtime tokens and should not be stored as permanent launch URLs.
+
+Next implementation steps
+-------------------------
+1. Inspect existing Dataverse custom APIs/tables for a reusable launch/request mechanism.
+2. If none exists, agree the table schema and security model (and whether an atomic claim custom API is needed).
+3. Implement create-request in the PCF, request-claim in the enrolment app, and app-key-specific route mapping.
+4. Reuse the same protocol in the third app.
+5. Test in dev: verify request creation, app claim, resulting hash route, expiry, and duplicate/open-in-two-tabs behavior.
