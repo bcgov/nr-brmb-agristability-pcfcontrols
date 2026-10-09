@@ -19,11 +19,12 @@ const ENROLMENT_QUERY = (accountId: string): string =>
 // Benefit table (vsi_benefit). vsi_participantprogramyearid is a lookup to the enrolment.
 const BENEFIT_ENTITY = "vsi_benefit";
 const BENEFIT_ENROLMENT_LOOKUP = "_vsi_participantprogramyearid_value";
+const ARMS_CONFIGURATION_ENTITY = "vsi_armsconfiguration";
 const ENVIRONMENT_VARIABLE_ENTITY = "environmentvariabledefinition";
 const ENVIRONMENT_VARIABLE_VALUE_ENTITY = "environmentvariablevalue";
 const ENROLMENT_APP_URL_SCHEMA_NAME = "vsi_ENcodeAppUrl";
 const BENEFIT_QUERY = (enrolmentId: string): string =>
-    `?$select=vsi_benefitid,vsi_name,vsi_benefittype,createdon,` +
+    `?$select=vsi_benefitid,vsi_name,vsi_benefittype,vsi_fileinfarmsurl,_vsi_participantid_value,createdon,` +
     `vsi_benefiteligibile,vsi_enrolmentpaid,vsi_formsreceived,vsi_showeligibilityflag,` +
     `vsi_benefitverified,vsi_pendingfinance,vsi_benefitcomplete,` +
     `vsi_adj18monthsafterfinal,vsi_adjhascompletedfinal` +
@@ -55,6 +56,7 @@ export class AgristabilityProgramSummary implements ComponentFramework.ReactCont
             fetchEnrolments: (accountId) => this.fetchEnrolments(accountId),
             fetchBenefits: (enrolmentId) => this.fetchBenefits(enrolmentId),
             fetchEnrolmentAppUrl: () => this.fetchEnrolmentAppUrl(),
+            fetchCoreAppConfig: () => this.fetchCoreAppConfig(),
         };
     }
 
@@ -92,7 +94,6 @@ export class AgristabilityProgramSummary implements ComponentFramework.ReactCont
             accountId = undefined;
             accountName = undefined;
         }
-        accountId ??= this.normalizeId(this.context.parameters.testAccountId?.raw ?? undefined);
         return { accountId, accountName };
     }
 
@@ -117,6 +118,8 @@ export class AgristabilityProgramSummary implements ComponentFramework.ReactCont
             id: String(b.vsi_benefitid ?? ""),
             name: String(b.vsi_name ?? ""),
             type: (b["vsi_benefittype@OData.Community.Display.V1.FormattedValue"] as string | undefined) ?? null,
+            formsInFarmsUrl: (b.vsi_fileinfarmsurl as string | undefined) ?? null,
+            accountId: (b._vsi_participantid_value as string | undefined) ?? null,
             createdOn: (b.createdon as string | undefined) ?? null,
             benefitEligible: (b.vsi_benefiteligibile as boolean | undefined) ?? null,
             enrolmentPaid: (b.vsi_enrolmentpaid as boolean | undefined) ?? null,
@@ -128,6 +131,20 @@ export class AgristabilityProgramSummary implements ComponentFramework.ReactCont
             adjustmentAfter18Months: (b.vsi_adj18monthsafterfinal as boolean | undefined) ?? null,
             adjustmentHasCompletedFinal: (b.vsi_adjhascompletedfinal as boolean | undefined) ?? null,
         }));
+    }
+
+    private async fetchCoreAppConfig(): Promise<{ appId: string; financeAppId: string; environmentUrl: string } | undefined> {
+        const result = await this.context.webAPI.retrieveMultipleRecords(
+            ARMS_CONFIGURATION_ENTITY,
+            "?$select=cr4dd_coreappid,vsi_financeappid,vsi_coreenvironmenturl,vsi_activeconfiguration&$filter=vsi_activeconfiguration eq true&$orderby=modifiedon desc",
+        );
+        const config = result.entities[0] as Record<string, unknown> | undefined;
+        const appId = typeof config?.cr4dd_coreappid === "string" ? config.cr4dd_coreappid.trim() : "";
+        const financeAppId = typeof config?.vsi_financeappid === "string" ? config.vsi_financeappid.trim() : "";
+        const environmentUrl = typeof config?.vsi_coreenvironmenturl === "string"
+            ? config.vsi_coreenvironmenturl.trim()
+            : "";
+        return appId && financeAppId && environmentUrl ? { appId, financeAppId, environmentUrl } : undefined;
     }
 
     private async fetchEnrolmentAppUrl(): Promise<string | undefined> {
