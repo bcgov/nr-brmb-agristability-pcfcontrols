@@ -23,6 +23,8 @@ export interface IBenefit {
   id: string;
   name: string;
   type?: string | null;
+  formsInFarmsUrl?: string | null;
+  accountId?: string | null;
   createdOn?: string | null;
   benefitEligible?: boolean | null;
   enrolmentPaid?: boolean | null;
@@ -40,6 +42,7 @@ export interface IProgramDataProvider {
   fetchEnrolments: (accountId: string) => Promise<IEnrolment[]>;
   fetchBenefits: (enrolmentId: string) => Promise<IBenefit[]>;
   fetchEnrolmentAppUrl: () => Promise<string | undefined>;
+  fetchCoreAppConfig: () => Promise<{ appId: string; financeAppId: string; environmentUrl: string } | undefined>;
 }
 
 export interface IProgramSummaryProps {
@@ -216,6 +219,7 @@ interface IBenefitCardProps {
   expandSignal: number;
   enrolmentAppUrl?: string;
   enrolmentId?: string;
+  coreAppConfig?: { appId: string; financeAppId: string; environmentUrl: string };
 }
 
 const YesNo: React.FC<{ value?: boolean | null }> = ({ value }) => {
@@ -225,7 +229,7 @@ const YesNo: React.FC<{ value?: boolean | null }> = ({ value }) => {
   return <Text>N/A</Text>;
 };
 
-const BenefitCard: React.FC<IBenefitCardProps> = ({ slot, expandAll, expandSignal, enrolmentAppUrl, enrolmentId }) => {
+const BenefitCard: React.FC<IBenefitCardProps> = ({ slot, expandAll, expandSignal, enrolmentAppUrl, enrolmentId, coreAppConfig }) => {
   const styles = useStyles();
   const [showEligibility, setShowEligibility] = React.useState(false);
   const [showBenefitDetails, setShowBenefitDetails] = React.useState(false);
@@ -241,12 +245,30 @@ const BenefitCard: React.FC<IBenefitCardProps> = ({ slot, expandAll, expandSigna
     if (!enrolmentAppUrl || !enrolmentId) return undefined;
     const appUrl = new URL(enrolmentAppUrl);
     const normalizedEnrolmentId = enrolmentId.replace(/[{}]/g, '').trim();
-    const route = `/enrolment/dashboard/${normalizedEnrolmentId}`;
-    appUrl.searchParams.set('screen', 'enrolment');
-    appUrl.searchParams.set('enrolmentId', normalizedEnrolmentId);
-    appUrl.hash = route;
+    appUrl.searchParams.set('id', normalizedEnrolmentId);
+    appUrl.hash = '';
     return appUrl.toString();
   }, [enrolmentAppUrl, enrolmentId]);
+  const benefitRecordHref = React.useMemo(() => {
+    if (!coreAppConfig || !b?.id) return undefined;
+    const baseUrl = coreAppConfig.environmentUrl.replace(/\/+$/, '');
+    const recordUrl = new URL(`${baseUrl}/main.aspx`);
+    recordUrl.searchParams.set('appid', coreAppConfig.appId);
+    recordUrl.searchParams.set('pagetype', 'entityrecord');
+    recordUrl.searchParams.set('etn', 'vsi_benefit');
+    recordUrl.searchParams.set('id', b.id.replace(/[{}]/g, '').trim());
+    return recordUrl.toString();
+  }, [b?.id, coreAppConfig]);
+  const financeAccountHref = React.useMemo(() => {
+    if (!coreAppConfig || !b?.accountId) return undefined;
+    const baseUrl = coreAppConfig.environmentUrl.replace(/\/+$/, '');
+    const recordUrl = new URL(`${baseUrl}/main.aspx`);
+    recordUrl.searchParams.set('appid', coreAppConfig.financeAppId);
+    recordUrl.searchParams.set('pagetype', 'entityrecord');
+    recordUrl.searchParams.set('etn', 'account');
+    recordUrl.searchParams.set('id', b.accountId.replace(/[{}]/g, '').trim());
+    return recordUrl.toString();
+  }, [b?.accountId, coreAppConfig]);
   const stateLabel = isAdjustment
     ? `State of Adjustment ${slot.kind === 'adjustment-newest' ? '1' : '2'}`
     : 'State of Benefit';
@@ -317,7 +339,21 @@ const BenefitCard: React.FC<IBenefitCardProps> = ({ slot, expandAll, expandSigna
                   </div>
                   <div className={styles.labelRow}>
                     <Text>Forms Received:</Text>
-                    <YesNo value={b.formsReceived} />
+                    <div className={styles.linkedValue}>
+                      <YesNo value={b.formsReceived} />
+                      {b.formsInFarmsUrl && (
+                        <a
+                          className={styles.appLink}
+                          href={b.formsInFarmsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label="Open form in FARMS"
+                          title="Open form in FARMS"
+                        >
+                          <LinkIcon />
+                        </a>
+                      )}
+                    </div>
                   </div>
                 </>
               )}
@@ -338,15 +374,57 @@ const BenefitCard: React.FC<IBenefitCardProps> = ({ slot, expandAll, expandSigna
             <div className={styles.detailsBox}>
               <div className={styles.labelRow}>
                 <Text>Verified:</Text>
-                <YesNo value={b.benefitVerified} />
+                <div className={styles.linkedValue}>
+                  <YesNo value={b.benefitVerified} />
+                  {b.formsInFarmsUrl && (
+                    <a
+                      className={styles.appLink}
+                      href={b.formsInFarmsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Open form in FARMS"
+                      title="Open form in FARMS"
+                    >
+                      <LinkIcon />
+                    </a>
+                  )}
+                </div>
               </div>
               <div className={styles.labelRow}>
                 <Text>Pending Finance:</Text>
-                <YesNo value={b.pendingFinance} />
+                <div className={styles.linkedValue}>
+                  <YesNo value={b.pendingFinance} />
+                  {financeAccountHref && (
+                    <a
+                      className={styles.appLink}
+                      href={financeAccountHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Open Account in Finance app"
+                      title="Open Account in Finance app"
+                    >
+                      <LinkIcon />
+                    </a>
+                  )}
+                </div>
               </div>
               <div className={styles.labelRow}>
                 <Text>Benefit Complete:</Text>
-                <YesNo value={b.benefitComplete} />
+                <div className={styles.linkedValue}>
+                  <YesNo value={b.benefitComplete} />
+                  {benefitRecordHref && (
+                    <a
+                      className={styles.appLink}
+                      href={benefitRecordHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Open Benefit record in model-driven app"
+                      title="Open Benefit record in model-driven app"
+                    >
+                      <LinkIcon />
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -369,6 +447,7 @@ export const ProgramSummary: React.FC<IProgramSummaryProps> = ({ provider, conte
   const [expandAll, setExpandAll] = React.useState(false);
   const [expandSignal, setExpandSignal] = React.useState(0);
   const [enrolmentAppUrl, setEnrolmentAppUrl] = React.useState<string | undefined>();
+  const [coreAppConfig, setCoreAppConfig] = React.useState<{ appId: string; financeAppId: string; environmentUrl: string } | undefined>();
 
   React.useEffect(() => {
     let cancelled = false;
@@ -381,6 +460,22 @@ export const ProgramSummary: React.FC<IProgramSummaryProps> = ({ provider, conte
       }
     };
     void loadUrl();
+    return () => {
+      cancelled = true;
+    };
+  }, [provider]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const loadCoreAppConfig = async (): Promise<void> => {
+      try {
+        const config = await provider.fetchCoreAppConfig();
+        if (!cancelled) setCoreAppConfig(config);
+      } catch {
+        if (!cancelled) setCoreAppConfig(undefined);
+      }
+    };
+    void loadCoreAppConfig();
     return () => {
       cancelled = true;
     };
@@ -515,6 +610,7 @@ export const ProgramSummary: React.FC<IProgramSummaryProps> = ({ provider, conte
                       expandSignal={expandSignal}
                       enrolmentAppUrl={enrolmentAppUrl}
                       enrolmentId={selectedEnrolmentId}
+                      coreAppConfig={coreAppConfig}
                     />
                   ))}
                 </div>

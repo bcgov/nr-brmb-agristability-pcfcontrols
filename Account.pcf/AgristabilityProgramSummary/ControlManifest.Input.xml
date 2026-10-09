@@ -19,8 +19,6 @@
     </external-service-usage>
     <!-- Bound field (required for a field control). Bind this to any text field on the Account form; the control reads the record id from the form context. -->
     <property name="boundField" display-name-key="BoundField_Display_Key" description-key="BoundField_Desc_Key" of-type="SingleLine.Text" usage="bound" required="true" />
-    <!-- Optional test-only override used by the PCF test harness when no form context is present. Ignored in the model-driven app. -->
-    <property name="testAccountId" display-name-key="TestAccountId_Display_Key" description-key="TestAccountId_Desc_Key" of-type="SingleLine.Text" usage="input" required="false" />
     <!--
       Property node's of-type attribute can be of-type-group attribute.
       Example:
