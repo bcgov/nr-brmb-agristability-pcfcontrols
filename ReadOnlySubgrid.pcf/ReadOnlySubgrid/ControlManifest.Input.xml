@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Author: Jeroen Jonckheer
+  Control: ReadOnlySubgrid
+  Purpose: Read-only dataset control for model-driven app subgrids.
+           Renders the bound records in a FluentUI DetailsList. Because
+           this control replaces the standard subgrid rendering, the
+           subgrid command bar (New / Add Existing / Delete) is hidden.
+
+  Naming: the control's full logical name is <prefix>_<namespace>.<constructor>.
+  Following the JJ Kanban convention (jj_Boards.Kanban) the namespace is a
+  functional domain ("Grids"), not the author name, and the publisher prefix
+  is "jj" - so this control resolves to jj_Grids.ReadOnlySubgrid in Dataverse.
+-->
+<manifest>
+  <control
+    namespace="BRMB"
+    constructor="ReadOnlySubgrid"
+    version="1.0.0"
+    display-name-key="ReadOnlySubgrid_Display"
+    description-key="ReadOnlySubgrid_Description"
+    control-type="virtual">
+
+    <!--
+      Dataset binding. The property name "dataset" is the name used from
+      index.ts via context.parameters.dataset. The cds-data-set-options
+      attribute declaratively hides the command bar and view selector
+      when this control is applied to a subgrid, which reinforces the
+      read-only intent even on hosts that still show those elements.
+    -->
+    <data-set
+      name="dataset"
+      display-name-key="Dataset_Display"
+      description-key="Dataset_Description"
+      cds-data-set-options="displayCommandBar:false;displayViewSelector:false">
+    </data-set>
+
+    <resources>
+      <code path="index.ts" order="1" />
+      <platform-library name="React" version="16.8.6" />
+      <platform-library name="Fluent" version="8.29.0" />
+      <css path="css/ReadOnlySubgrid.css" order="1" />
+      <resx path="strings/ReadOnlySubgrid.1033.resx" version="1.0.0" />
+    </resources>
+
+    <feature-usage>
+      <uses-feature name="Utility" required="true" />
+    </feature-usage>
+
+  </control>
+</manifest>

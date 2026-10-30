@@ -1,0 +1,145 @@
+/*
+ * Author: Jeroen Jonckheer
+ * Stylesheet: ReadOnlySubgrid.css
+ *
+ * Calibrated against the standard Power Apps modern read-only grid
+ * (AG Grid under the hood), confirmed via saved-HTML inspection:
+ *   - row wrapper:     height 42px (inline on ag-row, 42px translateY pitch)
+ *   - header row:      height 42px (inline on ag-header-row)
+ *   - data cell text:  font 14px / line-height 20px / color rgb(36, 36, 36)
+ *   - header text:     font 14px / font-weight 600 / color rgb(36, 36, 36)
+ *   - native scrollbar: 18px wide / tall (both axes)
+ *
+ * We deliberately leave FluentUI's internal header layout (padding,
+ * margins on individual cell parts) alone, because overriding it with
+ * aggressive !important rules has been shown to break the header
+ * rendering. Only the visible style values (font, colour, row
+ * separator) are overridden.
+ */
+
+/* White surface across the whole control. */
+.jj-readonly-subgrid-row,
+.ms-DetailsList,
+.ms-DetailsHeader,
+.ms-DetailsRow,
+.ms-DetailsRow-cell {
+    background-color: #ffffff;
+}
+
+/* Header. Force the outer DetailsHeader wrapper to 42px tall to match
+   the standard PA modern grid (AG Grid renders ag-header-row inline as
+   height:42px).
+
+   FluentUI's default DetailsHeader styles (DetailsHeader.styles.js)
+   set box-sizing:content-box with padding-top:16px and padding-bottom:1px,
+   so even with height:42px the rendered band is 59px. The 16px top
+   padding is reserved for the GroupExpander spacer column, which we do
+   not render. We override to box-sizing:border-box + zero vertical
+   padding so the visible header matches the 42px row pitch exactly.
+   line-height stays at HEADER_HEIGHT so the inline cellTitle text is
+   still vertically centred. */
+.ms-DetailsList .ms-DetailsHeader {
+    border-bottom: 1px solid #edebe9;
+    box-sizing: border-box;
+    padding-top: 0;
+    padding-bottom: 0;
+    height: 42px;
+    min-height: 42px;
+    max-height: 42px;
+    line-height: 42px;
+}
+
+.ms-DetailsList .ms-DetailsHeader-cell {
+    height: 42px;
+}
+
+.ms-DetailsList .ms-DetailsHeader-cellTitle {
+    font-weight: 600;
+    color: rgb(36, 36, 36);
+    font-size: 14px;
+}
+
+.ms-DetailsList .ms-DetailsHeader-cellName {
+    font-weight: 600;
+    color: rgb(36, 36, 36);
+    font-size: 14px;
+}
+
+/* Row: force the wrapper to 42px tall to match the standard PA modern
+   grid (AG Grid renders ag-row inline as height:42px with a 42px
+   translateY pitch, so no inter-row gap). Cells use flex + align-items
+   center to keep their text vertically centred within the row. */
+.ms-DetailsList .ms-DetailsRow {
+    border-bottom: 1px solid #faf9f8;
+    height: 42px;
+    min-height: 42px;
+}
+
+.ms-DetailsRow-cell {
+    color: rgb(36, 36, 36);
+    background-color: transparent;
+    font-size: 14px;
+    line-height: 20px;
+    height: 42px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+}
+
+/* Click-aware row wrapper. */
+.jj-readonly-subgrid-row {
+    cursor: pointer;
+    outline: none;
+    display: block;
+}
+
+.jj-readonly-subgrid-row:hover .ms-DetailsRow {
+    background-color: #f3f2f1;
+}
+
+.jj-readonly-subgrid-row:hover .ms-DetailsRow-cell {
+    background-color: transparent;
+}
+
+.jj-readonly-subgrid-row:focus-visible .ms-DetailsRow {
+    outline: 2px solid #0078d4;
+    outline-offset: -2px;
+    background-color: #eff6fc;
+}
+
+/* Group headers, when Group by is active. */
+.ms-GroupHeader {
+    background-color: #faf9f8;
+}
+
+.ms-GroupHeader:hover {
+    background-color: #f3f2f1;
+}
+
+/* Lookup-column cell links: blue text, underline only on hover. */
+.jj-readonly-subgrid-link {
+    color: #005a9e;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.jj-readonly-subgrid-link:hover {
+    color: #004578;
+    text-decoration: underline;
+}
+
+.jj-readonly-subgrid-link:focus-visible {
+    outline: 2px solid #0078d4;
+    outline-offset: 1px;
+    color: #004578;
+    text-decoration: underline;
+}
+
+/* White background on input surfaces injected by Fluent helpers. */
+.jj-readonly-subgrid-row input,
+.jj-readonly-subgrid-row select,
+.jj-readonly-subgrid-row textarea,
+.ms-Callout input,
+.ms-Dialog input {
+    background-color: #ffffff;
+}

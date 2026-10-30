@@ -1,0 +1,25 @@
+{
+    // Author: Jeroen Jonckheer
+    // TypeScript config used ONLY by ts-jest (see jest.config.js).
+    //
+    // It mirrors the PCF compiler options but switches module output to
+    // CommonJS (Jest runs on Node) and enables esModuleInterop so the
+    // React default-import style works under CommonJS. The "types" array
+    // is widened to include jest + node alongside the ambient PCF types,
+    // because once "types" is set it otherwise suppresses automatic
+    // inclusion of @types/* (which would hide the global ComponentFramework
+    // namespace that gridLogic.ts depends on).
+    "extends": "./node_modules/pcf-scripts/tsconfig_base.json",
+    "compilerOptions": {
+        "module": "commonjs",
+        "jsx": "react",
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
+        "skipLibCheck": true,
+        "types": ["jest", "node", "powerapps-component-framework"]
+    },
+    "include": [
+        "ReadOnlySubgrid/**/*",
+        "tests/**/*"
+    ]
+}
