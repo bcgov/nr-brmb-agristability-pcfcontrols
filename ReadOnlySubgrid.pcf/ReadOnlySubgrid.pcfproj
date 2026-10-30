@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Author: Jeroen Jonckheer
+  Project: ReadOnlySubgrid.pcfproj
+  Wraps the PCF control so it can be referenced from a Dataverse
+  solution (.cdsproj). The MSBuild Pcf SDK invokes pcf-scripts under
+  the hood, so no separate npm step is required when building via
+  dotnet build of the parent solution.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ProjectGuid>f8d88329-db6d-443b-83b4-1a57041de750</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <Authors>Jeroen Jonckheer</Authors>
+    <Description>ReadOnlySubgrid PCF dataset control.</Description>
+    <PowerAppsTargetsPath>$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\PowerApps</PowerAppsTargetsPath>
+    <!-- The PCF SDK handles control resources via the manifest pipeline,
+         not via the .NET assembly resource compiler. Disable default
+         EmbeddedResource inclusion to avoid the duplicate "*.resources"
+         output collision raised by MSBuild on .resx files. -->
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+    <!-- Absolute OutputPath so referencing cdsproj projects (including
+         pac-generated temp wrappers under obj\) can locate the produced
+         bundle.js relative to this pcfproj, not relative to themselves.
+         The PowerApps MSBuild Solution targets resolve the value returned
+         from GetProjectOutputPath against the *consuming* project's
+         directory, so a relative bin\... path breaks. -->
+    <OutputPath>$(MSBuildThisFileDirectory)bin\$(Configuration)\$(TargetFramework)\</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.PowerApps.MSBuild.Pcf" Version="1.35.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ExcludeDirectories Include="$(MSBuildThisFileDirectory)bin\**" />
+    <ExcludeDirectories Include="$(MSBuildThisFileDirectory)obj\**" />
+    <ExcludeDirectories Include="$(MSBuildThisFileDirectory)node_modules\**" />
+    <ExcludeDirectories Include="$(MSBuildThisFileDirectory)out\**" />
+    <ExcludeDirectories Include="$(MSBuildThisFileDirectory)Solution\**" />
+  </ItemGroup>
+
+</Project>

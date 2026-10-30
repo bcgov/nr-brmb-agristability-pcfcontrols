@@ -1,0 +1,217 @@
+/*
+ * Author: Jeroen Jonckheer
+ * Stylesheet: EnrolmentGrid.css
+ *
+ * Calibrated against the standard Power Apps modern read-only grid
+ * (AG Grid under the hood), confirmed via saved-HTML inspection:
+ *   - row wrapper:     height 42px (inline on ag-row, 42px translateY pitch)
+ *   - header row:      height 42px (inline on ag-header-row)
+ *   - data cell text:  font 14px / line-height 20px / color rgb(36, 36, 36)
+ *   - header text:     font 14px / font-weight 600 / color rgb(36, 36, 36)
+ *   - native scrollbar: 18px wide / tall (both axes)
+ *
+ * We deliberately leave FluentUI's internal header layout (padding,
+ * margins on individual cell parts) alone, because overriding it with
+ * aggressive !important rules has been shown to break the header
+ * rendering. Only the visible style values (font, colour, row
+ * separator) are overridden.
+ */
+
+/* White surface across the whole control. */
+.brmb-enrolment-grid-row,
+.ms-DetailsList,
+.ms-DetailsHeader,
+.ms-DetailsRow,
+.ms-DetailsRow-cell {
+    background-color: #ffffff;
+}
+
+/* Header. Force the outer DetailsHeader wrapper to 42px tall to match
+   the standard PA modern grid (AG Grid renders ag-header-row inline as
+   height:42px).
+
+   FluentUI's default DetailsHeader styles (DetailsHeader.styles.js)
+   set box-sizing:content-box with padding-top:16px and padding-bottom:1px,
+   so even with height:42px the rendered band is 59px. The 16px top
+   padding is reserved for the GroupExpander spacer column, which we do
+   not render. We override to box-sizing:border-box + zero vertical
+   padding so the visible header matches the 42px row pitch exactly.
+   line-height stays at HEADER_HEIGHT so the inline cellTitle text is
+   still vertically centred. */
+.ms-DetailsList .ms-DetailsHeader {
+    border-bottom: 1px solid #edebe9;
+    box-sizing: border-box;
+    padding-top: 0;
+    padding-bottom: 0;
+    height: 42px;
+    min-height: 42px;
+    max-height: 42px;
+    line-height: 42px;
+}
+
+.ms-DetailsList .ms-DetailsHeader-cell {
+    height: 42px;
+}
+
+.ms-DetailsList .ms-DetailsHeader-cellTitle {
+    font-weight: 600;
+    color: rgb(36, 36, 36);
+    font-size: 14px;
+}
+
+.ms-DetailsList .ms-DetailsHeader-cellName {
+    font-weight: 600;
+    color: rgb(36, 36, 36);
+    font-size: 14px;
+}
+
+/* Row: force the wrapper to 42px tall to match the standard PA modern
+   grid (AG Grid renders ag-row inline as height:42px with a 42px
+   translateY pitch, so no inter-row gap). Cells use flex + align-items
+   center to keep their text vertically centred within the row. */
+.ms-DetailsList .ms-DetailsRow {
+    border-bottom: 1px solid #faf9f8;
+    height: 42px;
+    min-height: 42px;
+}
+
+.ms-DetailsRow-cell {
+    color: rgb(36, 36, 36);
+    background-color: transparent;
+    font-size: 14px;
+    line-height: 20px;
+    height: 42px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+}
+
+/* Click-aware row wrapper. */
+.brmb-enrolment-grid-row {
+    cursor: pointer;
+    outline: none;
+    display: block;
+}
+
+.brmb-enrolment-grid-row:hover .ms-DetailsRow {
+    background-color: #f3f2f1;
+}
+
+.brmb-enrolment-grid-row:hover .ms-DetailsRow-cell {
+    background-color: transparent;
+}
+
+.brmb-enrolment-grid-row:focus-visible .ms-DetailsRow {
+    outline: 2px solid #0078d4;
+    outline-offset: -2px;
+    background-color: #eff6fc;
+}
+
+/* Group headers, when Group by is active. */
+.ms-GroupHeader {
+    background-color: #faf9f8;
+}
+
+.ms-GroupHeader:hover {
+    background-color: #f3f2f1;
+}
+
+/* Lookup-column cell links: blue text, underline only on hover. */
+.brmb-enrolment-grid-link {
+    color: #005a9e;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.brmb-enrolment-grid-link:hover {
+    color: #004578;
+    text-decoration: underline;
+}
+
+.brmb-enrolment-grid-link:focus-visible {
+    outline: 2px solid #0078d4;
+    outline-offset: 1px;
+    color: #004578;
+    text-decoration: underline;
+}
+
+/* External-app link icon in the first column (enrolment rows). The cell
+   content becomes a flex row: the icon sits at the left of the cell and
+   the text after it truncates with an ellipsis. Colours match the icon
+   in the AgristabilityProgramSummary control (neutral grey, blue on
+   hover). */
+.brmb-enrolment-grid-cell-with-applink {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+}
+
+.brmb-enrolment-grid-cell-with-applink > :last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.brmb-enrolment-grid-applink {
+    flex: 0 0 auto;
+    margin-right: 12px;
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    color: #605e5c;
+    cursor: pointer;
+}
+
+.brmb-enrolment-grid-applink:hover {
+    color: #0078d4;
+}
+
+.brmb-enrolment-grid-applink:focus-visible {
+    outline: 2px solid #0078d4;
+    outline-offset: 1px;
+    color: #0078d4;
+}
+
+/* Square selection checkboxes (command-bar variant), matching the modern
+   Power Apps grid instead of Fluent v8's default circular check. The
+   checkmark SVG inside is revealed only when checked. */
+.brmb-enrolment-grid-checkbox {
+    width: 16px;
+    height: 16px;
+    box-sizing: border-box;
+    border: 1px solid #605e5c;
+    border-radius: 2px;
+    background-color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.brmb-enrolment-grid-checkbox svg {
+    visibility: hidden;
+}
+
+.brmb-enrolment-grid-checkbox.is-checked {
+    background-color: #115ea3;
+    border-color: #115ea3;
+}
+
+.brmb-enrolment-grid-checkbox.is-checked svg {
+    visibility: visible;
+}
+
+.ms-DetailsRow-cellCheck:hover .brmb-enrolment-grid-checkbox,
+.ms-DetailsHeader-cellIsCheck:hover .brmb-enrolment-grid-checkbox {
+    border-color: #115ea3;
+}
+
+/* White background on input surfaces injected by Fluent helpers. */
+.brmb-enrolment-grid-row input,
+.brmb-enrolment-grid-row select,
+.brmb-enrolment-grid-row textarea,
+.ms-Callout input,
+.ms-Dialog input {
+    background-color: #ffffff;
+}

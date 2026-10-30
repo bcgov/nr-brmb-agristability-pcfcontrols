@@ -1,0 +1,36 @@
+node_modules/
+out/
+obj/
+bin/
+generated/
+*.log
+.vs/
+*.user
+
+# Saved Power Apps reference page (contains real customer/lead PII) - never commit.
+* - Power Apps.html
+*_files/
+
+# Editor / tooling scratch
+.qodo/
+
+# Environment-specific dev helpers (hardcode a specific Dataverse org).
+tools/
+
+# Playwright runtime output (the produced media/ is committed, these are not)
+test-results/
+playwright-report/
+.playwright/
+demo-output/
+
+# esbuild output of the demo harness (source .tsx/.html is committed, build is not)
+harness/demo.js
+harness/demo.css
+harness/*.map
+
+# Wiki staging + clone (the wiki is a separate Git repo, not part of this one)
+wiki/
+.wiki-clone/
+
+# Local renamed solution zips ready for upload to a GitHub release
+dist/

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Author: Jeroen Jonckheer
+  Control: EnrolmentGridCommands
+  Purpose: Command-bar variant of the EnrolmentGrid dataset control for
+           model-driven app subgrids.
+           Identical rendering (FluentUI DetailsList, enrolment rows link
+           to the external code app), but the subgrid COMMAND BAR stays
+           visible (for custom ribbon buttons) and rows are selectable;
+           the selection is forwarded to dataset.setSelectedRecordIds so
+           command-bar buttons act on the selected records.
+
+           Use the plain EnrolmentGrid control instead when the subgrid
+           should be read-only with the command bar hidden - the
+           displayCommandBar flag below is fixed per control, so the
+           choice is made by picking the control on each subgrid.
+
+  Shared source: the rendering component and grid logic are imported from
+  the sibling EnrolmentGrid control (../EnrolmentGrid/, same project), so
+  there is nothing to re-copy. Only css/EnrolmentGridCommands.css remains a
+  copy of EnrolmentGrid/css/EnrolmentGrid.css (manifest resources must live
+  inside the control's own folder) - keep it in sync on css changes.
+
+  Naming: with the "vsi" publisher prefix this control resolves to
+  vsi_BRMB.EnrolmentGridCommands in Dataverse.
+-->
+<manifest>
+  <control
+    namespace="BRMB"
+    constructor="EnrolmentGridCommands"
+    version="1.0.5"
+    display-name-key="EnrolmentGridCommands_Display"
+    description-key="EnrolmentGridCommands_Description"
+    control-type="virtual">
+
+    <!--
+      Dataset binding. displayCommandBar:true keeps the subgrid command
+      bar (including custom ribbon buttons) visible; the view selector
+      stays hidden to match the EnrolmentGrid variant.
+    -->
+    <data-set
+      name="dataset"
+      display-name-key="Dataset_Display"
+      description-key="Dataset_Description"
+      cds-data-set-options="displayCommandBar:true;displayViewSelector:false">
+    </data-set>
+
+    <resources>
+      <code path="index.ts" order="1" />
+      <platform-library name="React" version="16.8.6" />
+      <platform-library name="Fluent" version="8.29.0" />
+      <css path="css/EnrolmentGridCommands.css" order="1" />
+      <resx path="strings/EnrolmentGridCommands.1033.resx" version="1.0.1" />
+    </resources>
+
+    <feature-usage>
+      <uses-feature name="WebAPI" required="true" />
+      <uses-feature name="Utility" required="true" />
+    </feature-usage>
+
+  </control>
+</manifest>

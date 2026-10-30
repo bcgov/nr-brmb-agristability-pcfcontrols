@@ -1,0 +1,30 @@
+<!--
+  Author: Jeroen Jonckheer
+  Purpose: Workaround for NETSDK1050 raised by .NET 8 SDK when a net462
+  cdsproj references a netstandard2.0 pcfproj without Visual Studio
+  Build Tools installed.
+
+  Reading the actual targets file at
+  Microsoft.NET.Build.Extensions.NETFramework.targets, the offending
+  error fires under three conditions:
+    DependsOnNETStandard == true AND
+    NETStandardInbox != true     AND
+    _UsingOldSDK == true
+
+  The pac-generated cdsproj uses the legacy non-SDK style (no
+  <Project Sdk="..."> attribute), which sets _UsingOldSDK to true.
+
+  We short-circuit the check by claiming the project does not depend on
+  .NET Standard. This is safe because the cdsproj does not actually
+  consume the referenced pcfproj's assembly - the PowerApps Solution
+  targets only consume its content outputs (bundle.js, manifest, etc.)
+  via a separate, SolutionPackager-driven pipeline.
+
+  This file is implicitly imported by every project under the same
+  directory tree (including pac-generated temporary wrappers under obj\).
+-->
+<Project>
+    <PropertyGroup>
+        <DependsOnNETStandard>false</DependsOnNETStandard>
+    </PropertyGroup>
+</Project>
