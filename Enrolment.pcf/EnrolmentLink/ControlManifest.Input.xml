@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Control: EnrolmentLink
+  Purpose: Field control for model-driven forms. Binds to a lookup column
+           (intended: the Enrolment / vsi_participantprogramyear lookup)
+           and renders the looked-up record's display name as a hyperlink.
+           Enrolment records open in the external code app (URL from the
+           vsi_ENcodeAppUrl environment variable) instead of the retired
+           Dataverse form; any other lookup target falls back to openForm.
+
+  Naming: the control's full logical name is <prefix>_<namespace>.<constructor>,
+  so with the "vsi" publisher prefix this control resolves to
+  vsi_BRMB.EnrolmentLink in Dataverse.
+-->
+<manifest>
+  <control
+    namespace="BRMB"
+    constructor="EnrolmentLink"
+    version="1.1.3"
+    display-name-key="EnrolmentLink_Display"
+    description-key="EnrolmentLink_Description"
+    control-type="virtual">
+
+    <external-service-usage enabled="false">
+    </external-service-usage>
+
+    <!--
+      Bound lookup column. Configure this control on the Enrolment lookup
+      field of a form (e.g. the Benefit form's vsi_participantprogramyearid
+      lookup). The property name "enrolment" is what index.ts reads via
+      context.parameters.enrolment.
+    -->
+    <property
+      name="enrolment"
+      display-name-key="Enrolment_Display"
+      description-key="Enrolment_Description"
+      of-type="Lookup.Simple"
+      usage="bound"
+      required="true" />
+
+    <resources>
+      <code path="index.ts" order="1" />
+      <platform-library name="React" version="16.8.6" />
+      <css path="css/EnrolmentLink.css" order="1" />
+      <resx path="strings/EnrolmentLink.1033.resx" version="1.0.0" />
+    </resources>
+
+    <feature-usage>
+      <uses-feature name="WebAPI" required="true" />
+      <uses-feature name="Utility" required="true" />
+    </feature-usage>
+
+  </control>
+</manifest>

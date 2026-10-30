@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Project: Enrolment.pcfproj
+  Wraps the three enrolment PCF controls (EnrolmentGrid,
+  EnrolmentGridCommands, EnrolmentLink) in a single project so they can be
+  referenced from one Dataverse solution (.cdsproj). pcf-scripts discovers
+  every ControlManifest.Input.xml under the project root, so all three
+  control folders build together. The MSBuild Pcf SDK invokes pcf-scripts
+  under the hood, so no separate npm step is required when building via
+  dotnet build of the parent solution.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ProjectGuid>ad33f174-60aa-461b-bee3-762b2449aa58</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <Description>Enrolment PCF controls (grid, grid-with-commands, lookup link).</Description>
+    <PowerAppsTargetsPath>$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\PowerApps</PowerAppsTargetsPath>
+    <!-- The PCF SDK handles control resources via the manifest pipeline,
+         not via the .NET assembly resource compiler. Disable default
+         EmbeddedResource inclusion to avoid the duplicate "*.resources"
+         output collision raised by MSBuild on .resx files. -->
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+    <!-- Absolute OutputPath so referencing cdsproj projects (including
+         pac-generated temp wrappers under obj\) can locate the produced
+         bundle.js relative to this pcfproj, not relative to themselves.
+         The PowerApps MSBuild Solution targets resolve the value returned
+         from GetProjectOutputPath against the *consuming* project's
+         directory, so a relative bin\... path breaks. -->
+    <OutputPath>$(MSBuildThisFileDirectory)bin\$(Configuration)\$(TargetFramework)\</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.PowerApps.MSBuild.Pcf" Version="1.35.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ExcludeDirectories Include="$(MSBuildThisFileDirectory)bin\**" />
+    <ExcludeDirectories Include="$(MSBuildThisFileDirectory)obj\**" />
+    <ExcludeDirectories Include="$(MSBuildThisFileDirectory)node_modules\**" />
+    <ExcludeDirectories Include="$(MSBuildThisFileDirectory)out\**" />
+    <ExcludeDirectories Include="$(MSBuildThisFileDirectory)Solution\**" />
+  </ItemGroup>
+
+</Project>

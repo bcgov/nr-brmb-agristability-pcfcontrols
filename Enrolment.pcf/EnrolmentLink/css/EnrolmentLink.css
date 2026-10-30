@@ -1,0 +1,128 @@
+/*
+ * Styles: EnrolmentLink
+ * Matches the standard model-driven lookup field link: Segoe UI, semibold,
+ * Fluent link blue, underline on hover only.
+ */
+
+.brmb-enrolment-link {
+    font-family: "Segoe UI", "Segoe UI Web (West European)", -apple-system,
+        BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: #115ea3;
+    text-decoration: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+}
+
+/* Leading chain-link glyph; matches the record icon slot on standard
+   lookup fields. Kept from shrinking so long names ellipsize instead. */
+.brmb-enrolment-link-icon {
+    flex-shrink: 0;
+}
+
+.brmb-enrolment-link-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.brmb-enrolment-link:hover,
+.brmb-enrolment-link:focus {
+    color: #0f548c;
+    text-decoration: underline;
+}
+
+.brmb-enrolment-link-empty {
+    font-family: "Segoe UI", "Segoe UI Web (West European)", -apple-system,
+        BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif;
+    font-size: 14px;
+    color: #242424;
+}
+
+/* ---- Editable states (mirrors the standard lookup input) ---------------- */
+
+/* Filled + editable: link followed by the clear / change buttons, inside
+   the same soft grey filled box as the other modern inputs. */
+.brmb-enrolment-lookup {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-height: 32px;
+    padding: 2px 6px 2px 10px;
+    background: #f5f5f5;
+    border: 1px solid #f5f5f5;
+    border-radius: 4px;
+}
+
+.brmb-enrolment-lookup:hover {
+    background: #f0f0f0;
+    border-color: #f0f0f0;
+}
+
+/* The link takes the remaining width so long names ellipsize and the
+   clear / search buttons stay pinned to the right edge. */
+.brmb-enrolment-lookup .brmb-enrolment-link {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.brmb-enrolment-lookup-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    padding: 4px;
+    border-radius: 4px;
+    color: #424242;
+    cursor: pointer;
+}
+
+.brmb-enrolment-lookup-btn:hover {
+    background: #f0f0f0;
+    color: #242424;
+}
+
+/* Empty + editable: placeholder box that opens the lookup dialog.
+   Matches the modern (Fluent v9 "filled") lookup input: soft grey fill,
+   no hard border, "---" placeholder, magnifier on the right. */
+.brmb-enrolment-lookup-pick {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 160px;
+    min-height: 32px;
+    padding: 4px 10px;
+    background: #f5f5f5;
+    border: 1px solid #f5f5f5;
+    border-radius: 4px;
+    color: #616161;
+    cursor: pointer;
+    font-family: "Segoe UI", "Segoe UI Web (West European)", -apple-system,
+        BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif;
+    font-size: 14px;
+    text-align: left;
+}
+
+.brmb-enrolment-lookup-pick:hover {
+    background: #f0f0f0;
+    border-color: #f0f0f0;
+}
+
+.brmb-enrolment-lookup-placeholder {
+    color: #616161;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
