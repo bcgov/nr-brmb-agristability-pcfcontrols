@@ -46,6 +46,20 @@ export const MIN_COLUMN_WIDTH = 60;
 export const DEFAULT_COLUMN_WIDTH = 120;
 
 /**
+ * Content-based auto-width estimation, used when the host does not supply
+ * a usable view width (see resolveColumnWidth). Main-grid hosts are known
+ * to report useless visualSizeFactor values, so instead of a flat
+ * DEFAULT_COLUMN_WIDTH we size the column to its longest rendered text.
+ * APPROX_CHAR_WIDTH approximates the average glyph width of the grid's
+ * 14px Segoe UI font; AUTO_WIDTH_PADDING covers the cell's horizontal
+ * padding plus the header's sort/menu chevrons; MAX_AUTO_COLUMN_WIDTH
+ * keeps one long text column from swallowing the whole grid.
+ */
+export const APPROX_CHAR_WIDTH = 7.5;
+export const AUTO_WIDTH_PADDING = 28;
+export const MAX_AUTO_COLUMN_WIDTH = 340;
+
+/**
  * Row and header pitch (px). Calibrated against the standard Power Apps
  * modern read-only grid, which renders its AG Grid rows/header inline at
  * height:42px with a 42px translateY pitch (no inter-row gap). The
@@ -83,8 +97,15 @@ export const MAX_VISUAL_ROWS = 25;
  * paging. With only the host's tiny default page loaded, the body never
  * overflows, so the scroll handler can never fire; we proactively pull
  * pages up to this many records to make the rest reachable.
+ *
+ * While a client-side column filter is active the target is raised to
+ * FILTERED_EAGER_LOAD_TARGET: the filter can only match rows that are
+ * loaded, so with the default target a filtered grid silently dropped
+ * matches living in unloaded pages (most visibly after reversing the
+ * sort, which moves the matches to the far end of the server order).
  */
 export const EAGER_LOAD_TARGET = 100;
+export const FILTERED_EAGER_LOAD_TARGET = 1000;
 
 /** Scroll distance (px) from the bottom at which we request the next page. */
 export const PAGING_SCROLL_THRESHOLD = 80;
@@ -162,19 +183,55 @@ export function isLookupColumn(dataType: string | undefined): boolean {
  *
  * PCF exposes the configured per-column width via Column.visualSizeFactor
  * (in pixels, despite the "factor" naming). We honour it verbatim when it
- * is a sane number; a 0 / undefined / sub-minimum value usually means the
- * view did not specify a width, so we fall back to DEFAULT_COLUMN_WIDTH to
- * keep the column legible.
+ * is a sane number; a 0 / undefined / sub-minimum value means the view
+ * did not specify a usable width — subgrid hosts omit it for some
+ * columns, and MAIN-grid hosts are known to report useless values for
+ * every column. In that case we use `fallback` when the caller supplies
+ * one (typically a content-based estimate from estimateColumnWidth),
+ * else DEFAULT_COLUMN_WIDTH.
  *
  * We intentionally do NOT auto-distribute widths across the container.
  * That would fight the view definition. If the total exceeds the
  * container the body scrolls horizontally; if it is smaller the columns
  * simply leave whitespace on the right: matching the standard grid.
  */
-export function resolveColumnWidth(visualSizeFactor: number | undefined): number {
+export function resolveColumnWidth(
+    visualSizeFactor: number | undefined,
+    fallback: number = DEFAULT_COLUMN_WIDTH
+): number {
     return typeof visualSizeFactor === "number" && visualSizeFactor >= MIN_COLUMN_WIDTH
         ? visualSizeFactor
-        : DEFAULT_COLUMN_WIDTH;
+        : fallback;
+}
+
+/**
+ * Estimate a column's width (px) from its content: the longest formatted
+ * cell value across the loaded rows, or the header label if that is
+ * longer, converted to pixels at APPROX_CHAR_WIDTH per character plus
+ * AUTO_WIDTH_PADDING. `extraPx` reserves room for non-text content in the
+ * cell (the external-app link icon). Clamped to
+ * [MIN_COLUMN_WIDTH, MAX_AUTO_COLUMN_WIDTH].
+ *
+ * This is an estimate, not a measurement — close enough for the "host
+ * gave us no width" fallback it serves, and cheap enough to run over all
+ * loaded rows inside a memo.
+ */
+export function estimateColumnWidth(
+    headerText: string,
+    items: IGridItem[],
+    columnName: string,
+    extraPx = 0
+): number {
+    let maxChars = (headerText || "").length;
+    for (const item of items) {
+        const v = item[columnName];
+        if (typeof v === "string" && v.length > maxChars) {
+            maxChars = v.length;
+        }
+    }
+    const px =
+        Math.round(maxChars * APPROX_CHAR_WIDTH) + AUTO_WIDTH_PADDING + extraPx;
+    return Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_AUTO_COLUMN_WIDTH, px));
 }
 
 /**
@@ -555,8 +612,10 @@ export function computeVisualRows(pageSize: number): number {
  *
  * The natural (content) height is: header + N rows + horizontal
  * scrollbar gutter + footer. When the host allocates a concrete height
- * we never exceed it (so the grid fits its host slot and the body
- * scrolls); when the host reports 0/unknown we use the natural height.
+ * smaller than that, we SNAP DOWN to the tallest whole-row height that
+ * fits (at least one row), so the body ends cleanly on a row boundary
+ * instead of showing a sliver of the next row under the horizontal
+ * scrollbar. When the host reports 0/unknown we use the natural height.
  *
  * @param allocatedHeight Host-allocated height (context.mode.allocatedHeight); <= 0 means unknown.
  * @param visualRows      Result of computeVisualRows.
@@ -569,14 +628,17 @@ export function computeOuterHeight(
     headerHeight: number,
     rowHeight: number
 ): number {
-    const contentHeight =
-        headerHeight +
-        visualRows * rowHeight +
-        HORIZONTAL_SCROLLBAR_HEIGHT +
-        FOOTER_HEIGHT;
-    return allocatedHeight > 0
-        ? Math.min(allocatedHeight, contentHeight)
-        : contentHeight;
+    const chrome =
+        headerHeight + HORIZONTAL_SCROLLBAR_HEIGHT + FOOTER_HEIGHT;
+    const contentHeight = chrome + visualRows * rowHeight;
+    if (allocatedHeight <= 0 || allocatedHeight >= contentHeight) {
+        return contentHeight;
+    }
+    const fittedRows = Math.max(
+        1,
+        Math.floor((allocatedHeight - chrome) / rowHeight)
+    );
+    return chrome + fittedRows * rowHeight;
 }
 
 /**

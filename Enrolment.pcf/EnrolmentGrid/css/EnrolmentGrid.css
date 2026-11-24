@@ -116,11 +116,32 @@
     background-color: #f3f2f1;
 }
 
-/* Lookup-column cell links: blue text, underline only on hover. */
+/* Cell content wrapper: truncate overflowing text with an ellipsis. The
+   cell itself is a flex row (see .ms-DetailsRow-cell above), where a bare
+   text node cannot ellipsis-truncate and would hard-clip mid-character,
+   so every cell renderer wraps its content in this class. */
+.brmb-enrolment-grid-celltext {
+    display: inline-block;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+/* Cell links (lookup columns + the first-column open link): blue with a
+   persistent underline, like the standard grid. Links that leave for the
+   external code app (enrolment rows/lookups) carry the -external modifier
+   and stay underline-free until hovered/focused. */
 .brmb-enrolment-grid-link {
     color: #005a9e;
-    text-decoration: none;
+    text-decoration: underline;
     cursor: pointer;
+}
+
+.brmb-enrolment-grid-link.brmb-enrolment-grid-link-external {
+    text-decoration: none;
 }
 
 .brmb-enrolment-grid-link:hover {

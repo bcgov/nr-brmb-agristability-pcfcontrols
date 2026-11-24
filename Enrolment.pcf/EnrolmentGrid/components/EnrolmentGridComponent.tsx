@@ -83,6 +83,8 @@ import {
     computeOuterHeight,
     computeVisualRows,
     EAGER_LOAD_TARGET,
+    estimateColumnWidth,
+    FILTERED_EAGER_LOAD_TARGET,
     formatRowsLabel,
     FOOTER_HEIGHT,
     groupItems,
@@ -139,8 +141,22 @@ export interface IEnrolmentGridComponentProps {
     onSelectionChanged?: (ids: string[]) => void;
 }
 
-/** Chain-link glyph, identical to the one in AgristabilityProgramSummary. */
-const LinkIcon = (): JSX.Element => (
+/**
+ * Client-side UI settings that must survive a control recreate, cached at
+ * module scope per view id. MAIN-grid hosts tear the control down and
+ * recreate it on every server-side operation (e.g. the dataset.refresh a
+ * header-menu sort triggers), which resets all React state; without this
+ * cache a typed column filter vanished the moment the user sorted.
+ */
+interface IPersistedUiState {
+    userWidths: Record<string, number>;
+    columnOrder: string[] | null;
+    filters: Record<string, string>;
+    groupByColumn: string | null;
+}
+const persistedUiState = new Map<string, IPersistedUiState>();
+
+/** Chain-link glyph, identical to the one in AgristabilityProgramSummary. */const LinkIcon = (): JSX.Element => (
     <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
         <path
             d="M8.25 11.75l3.5-3.5M6.55 13.45l-1.1 1.1a3 3 0 01-4.24-4.24l3.18-3.18a3 3 0 014.24 0M13.45 6.55l1.1-1.1a3 3 0 014.24 4.24l-3.18 3.18a3 3 0 01-4.24 0"
@@ -181,7 +197,85 @@ const EmptyGridIcon = (): JSX.Element => {
     );
 };
 
+/**
+ * Error boundary around the grid. A throw during render would otherwise
+ * unmount the entire React tree and leave the host area blank with no
+ * clue why; instead we keep a visible red message with the error text
+ * (and log the stack), so field reports include the actual failure. The
+ * boundary retries rendering on the next dataset update so a transient
+ * failure (e.g. mid-reload dataset state) recovers by itself.
+ */
+class GridErrorBoundary extends React.Component<
+    { renderKey: string; children?: React.ReactNode },
+    { error: Error | null; failedKey: string | null }
+> {
+    constructor(props: { renderKey: string; children?: React.ReactNode }) {
+        super(props);
+        this.state = { error: null, failedKey: null };
+    }
+
+    public static getDerivedStateFromError(error: Error): { error: Error } {
+        return { error };
+    }
+
+    public componentDidCatch(error: Error, info: React.ErrorInfo): void {
+        // eslint-disable-next-line no-console
+        console.error("EnrolmentGrid: render failed", error, info);
+        this.setState({ failedKey: this.props.renderKey });
+    }
+
+    public componentDidUpdate(prevProps: { renderKey: string }): void {
+        // New dataset state (different renderKey): retry the real render.
+        if (
+            this.state.error &&
+            this.state.failedKey !== null &&
+            this.props.renderKey !== prevProps.renderKey
+        ) {
+            this.setState({ error: null, failedKey: null });
+        }
+    }
+
+    public render(): React.ReactNode {
+        if (this.state.error) {
+            return (
+                <div
+                    style={{
+                        padding: 12,
+                        backgroundColor: "#ffffff",
+                        color: "#a4262c",
+                        fontSize: 12,
+                        fontFamily: "Segoe UI, sans-serif",
+                    }}
+                >
+                    {"EnrolmentGrid failed to render: " +
+                        String(this.state.error.message || this.state.error)}
+                </div>
+            );
+        }
+        return this.props.children as React.ReactNode;
+    }
+}
+
 export const EnrolmentGridComponent: React.FC<IEnrolmentGridComponentProps> = (
+    props
+) => {
+    // The renderKey changes whenever the dataset content moves, letting the
+    // boundary retry after a failed render instead of staying red forever.
+    const ds = props.dataset;
+    const renderKey =
+        String(ds && ds.loading) +
+        ":" +
+        String(ds && ds.sortedRecordIds ? ds.sortedRecordIds.length : -1) +
+        ":" +
+        String(ds && ds.columns ? ds.columns.length : -1);
+    return (
+        <GridErrorBoundary renderKey={renderKey}>
+            <EnrolmentGridInner {...props} />
+        </GridErrorBoundary>
+    );
+};
+
+const EnrolmentGridInner: React.FC<IEnrolmentGridComponentProps> = (
     props
 ) => {
     const { dataset, width, height, onOpenRecord, onLoadMore, onSort } = props;
@@ -314,8 +408,21 @@ export const EnrolmentGridComponent: React.FC<IEnrolmentGridComponentProps> = (
     // menuState     : which column's header dropdown is open + its anchor.
     // filterCallout : which column's filter popover is open + its anchor.
     // widthDialog   : the open "Column width" dialog state, or null.
+    //
+    // Persistence: userWidths / columnOrder / filters / groupByColumn are
+    // seeded from a module-level cache keyed by the view id, and written
+    // back whenever they change. Server-side operations (sorting via the
+    // header menu calls dataset.refresh) make MAIN-grid hosts recreate the
+    // whole control, which used to wipe every client-side setting — e.g. a
+    // typed column filter disappeared the moment the user sorted. The
+    // cache survives the recreate (module scope outlives the component)
+    // so filter + sort can be active together.
+    const viewKey: string =
+        (typeof dataset.getViewId === "function" && dataset.getViewId()) ||
+        "default";
+    const cachedUi = persistedUiState.get(viewKey);
     const [userWidths, setUserWidths] = React.useState<Record<string, number>>(
-        {}
+        () => (cachedUi ? cachedUi.userWidths : {})
     );
     const [sortState, setSortState] = React.useState<{
         name: string | null;
@@ -330,11 +437,23 @@ export const EnrolmentGridComponent: React.FC<IEnrolmentGridComponentProps> = (
             dataset.sorting.length > 0 &&
             dataset.sorting[0].sortDirection === 1,
     });
-    const [columnOrder, setColumnOrder] = React.useState<string[] | null>(null);
-    const [filters, setFilters] = React.useState<Record<string, string>>({});
-    const [groupByColumn, setGroupByColumn] = React.useState<string | null>(
-        null
+    const [columnOrder, setColumnOrder] = React.useState<string[] | null>(
+        () => (cachedUi ? cachedUi.columnOrder : null)
     );
+    const [filters, setFilters] = React.useState<Record<string, string>>(
+        () => (cachedUi ? cachedUi.filters : {})
+    );
+    const [groupByColumn, setGroupByColumn] = React.useState<string | null>(
+        () => (cachedUi ? cachedUi.groupByColumn : null)
+    );
+    React.useEffect(() => {
+        persistedUiState.set(viewKey, {
+            userWidths,
+            columnOrder,
+            filters,
+            groupByColumn,
+        });
+    }, [viewKey, userWidths, columnOrder, filters, groupByColumn]);
     const [menuState, setMenuState] = React.useState<{
         column: string;
         target: HTMLElement;
@@ -354,16 +473,50 @@ export const EnrolmentGridComponent: React.FC<IEnrolmentGridComponentProps> = (
         [dataset.columns, columnOrder]
     );
 
+    // ---- Rows ---------------------------------------------------------------
+    // Pure transform of the dataset into renderable rows (see gridLogic).
+    // Built before the widths memo below, which estimates column widths
+    // from the rows' text when the view supplies no usable width.
+    const allItems: IGridItem[] = React.useMemo(
+        () => buildGridItems(dataset),
+        [dataset.sortedRecordIds, dataset.records, dataset.columns]
+    );
+
     // ---- Widths from the view definition -----------------------------------
-    // One resolved width per visible column (see resolveColumnWidth). User
-    // overrides in `userWidths` take precedence when building IColumn[].
+    // One resolved width per visible column. Content is measured into a
+    // per-column estimate (estimateColumnWidth) and the rendered width is
+    // never narrower than that estimate: MAIN-grid hosts report useless or
+    // stale visualSizeFactor values (a flat ~100px regardless of the view),
+    // which previously squeezed long text into unreadable slivers. A view
+    // width WIDER than the content is still honoured, and the user's
+    // drag-resize/dialog overrides in `userWidths` always win when
+    // building IColumn[].
     const distributedWidths = React.useMemo(() => {
         const result: Record<string, number> = {};
         baseColumns.forEach((c) => {
-            result[c.name] = resolveColumnWidth(c.visualSizeFactor);
+            // Reserve room for the external-app link icon when this lookup
+            // column actually links into the code app on some row.
+            const hasExternalIcon =
+                !!externalLinkEntity &&
+                isLookupColumn(c.dataType) &&
+                allItems.some((item) =>
+                    (item._refs[c.name] || []).some(
+                        (r) => r.entityName === externalLinkEntity
+                    )
+                );
+            const estimate = estimateColumnWidth(
+                c.displayName,
+                allItems,
+                c.name,
+                hasExternalIcon ? 28 : 0
+            );
+            result[c.name] = Math.max(
+                resolveColumnWidth(c.visualSizeFactor, estimate),
+                estimate
+            );
         });
         return result;
-    }, [baseColumns]);
+    }, [baseColumns, allItems, externalLinkEntity]);
 
     // ---- Move / sort helpers ------------------------------------------------
     const moveColumn = React.useCallback(
@@ -505,6 +658,8 @@ export const EnrolmentGridComponent: React.FC<IEnrolmentGridComponentProps> = (
     // click/keydown stop propagation so opening the *looked-up* record does
     // not also trigger the row-level "open this record" handler. PartyList
     // and multi-value lookups render several links separated by "; ".
+    // Links to the external code app (externalLinkEntity) carry the
+    // -external modifier so CSS can skip the persistent underline on them.
     const renderLookupCell = React.useCallback(
         (columnName: string, item?: IGridItem): JSX.Element | null => {
             if (!item) {
@@ -514,11 +669,16 @@ export const EnrolmentGridComponent: React.FC<IEnrolmentGridComponentProps> = (
                 (item._refs && item._refs[columnName]) || [];
             const text = (item[columnName] as string) || "";
             if (refs.length === 0) {
-                return <span>{text}</span>;
+                return (
+                    <span className="brmb-enrolment-grid-celltext">{text}</span>
+                );
             }
             return (
-                <span>
+                <span className="brmb-enrolment-grid-celltext">
                     {refs.map((r, i) => {
+                        const isExternal =
+                            !!externalLinkEntity &&
+                            r.entityName === externalLinkEntity;
                         const handleLinkClick = (
                             e: React.MouseEvent<HTMLAnchorElement>
                         ): void => {
@@ -540,8 +700,7 @@ export const EnrolmentGridComponent: React.FC<IEnrolmentGridComponentProps> = (
                                 key={r.entityName + "-" + r.id + "-" + i}
                             >
                                 {i > 0 ? <span>{"; "}</span> : null}
-                                {externalLinkEntity &&
-                                r.entityName === externalLinkEntity ? (
+                                {isExternal ? (
                                     // Lookup target lives in the external
                                     // code app: lead with the chain-link
                                     // icon + tooltip, like enrolment rows.
@@ -564,7 +723,12 @@ export const EnrolmentGridComponent: React.FC<IEnrolmentGridComponentProps> = (
                                     </a>
                                 ) : null}
                                 <a
-                                    className="brmb-enrolment-grid-link"
+                                    className={
+                                        "brmb-enrolment-grid-link" +
+                                        (isExternal
+                                            ? " brmb-enrolment-grid-link-external"
+                                            : "")
+                                    }
                                     role="link"
                                     tabIndex={0}
                                     onClick={handleLinkClick}
@@ -602,7 +766,9 @@ export const EnrolmentGridComponent: React.FC<IEnrolmentGridComponentProps> = (
             } else if (enableSelection) {
                 // With selection enabled a row click selects, so the first
                 // column's text becomes the record-open link (matching the
-                // standard grid's primary column).
+                // standard grid's primary column). Rows that open in the
+                // external code app get the -external modifier (no
+                // persistent underline).
                 const openRow = (
                     e: React.SyntheticEvent<HTMLAnchorElement>
                 ): void => {
@@ -612,7 +778,13 @@ export const EnrolmentGridComponent: React.FC<IEnrolmentGridComponentProps> = (
                 };
                 inner = (
                     <a
-                        className="brmb-enrolment-grid-link"
+                        className={
+                            "brmb-enrolment-grid-link brmb-enrolment-grid-celltext" +
+                            (externalLinkEntity &&
+                            item._entityName === externalLinkEntity
+                                ? " brmb-enrolment-grid-link-external"
+                                : "")
+                        }
                         role="link"
                         tabIndex={0}
                         onClick={openRow}
@@ -628,7 +800,11 @@ export const EnrolmentGridComponent: React.FC<IEnrolmentGridComponentProps> = (
                     </a>
                 );
             } else {
-                inner = <span>{(item[columnName] as string) || ""}</span>;
+                inner = (
+                    <span className="brmb-enrolment-grid-celltext">
+                        {(item[columnName] as string) || ""}
+                    </span>
+                );
             }
             if (!externalLinkEntity || item._entityName !== externalLinkEntity) {
                 return inner;
@@ -708,6 +884,15 @@ export const EnrolmentGridComponent: React.FC<IEnrolmentGridComponentProps> = (
             } else if (isLookup) {
                 def.onRender = (item?: IGridItem) =>
                     renderLookupCell(colName, item);
+            } else {
+                // Plain text cells get a truncating wrapper: the cell div is
+                // a flex row (see the css), where a bare text node cannot
+                // ellipsis-truncate and would hard-clip mid-character.
+                def.onRender = (item?: IGridItem) => (
+                    <span className="brmb-enrolment-grid-celltext">
+                        {item ? (item[colName] as string) || "" : ""}
+                    </span>
+                );
             }
             return def;
         });
@@ -723,13 +908,6 @@ export const EnrolmentGridComponent: React.FC<IEnrolmentGridComponentProps> = (
         renderPrimaryCell,
     ]);
 
-    // ---- Rows ---------------------------------------------------------------
-    // Pure transform of the dataset into renderable rows (see gridLogic).
-    const allItems: IGridItem[] = React.useMemo(
-        () => buildGridItems(dataset),
-        [dataset.sortedRecordIds, dataset.records, dataset.columns]
-    );
-
     // ---- Eager paging -------------------------------------------------------
     //
     // The subgrid host often starts with pageSize equal to the "Number of
@@ -738,18 +916,34 @@ export const EnrolmentGridComponent: React.FC<IEnrolmentGridComponentProps> = (
     // unreachable. We compensate by proactively pulling pages until we hit
     // EAGER_LOAD_TARGET or run out. onLoadMore uses loadNextPage (additive),
     // never setPageSize, which previously caused a never-resolving load.
+    //
+    // While a column filter is active the target is raised (see
+    // FILTERED_EAGER_LOAD_TARGET): the filter only sees loaded rows, so
+    // matches living in unloaded pages would otherwise silently vanish —
+    // most visibly after reversing the sort, which moves them to the far
+    // end of the server order.
     const hasNextPage =
         dataset.paging && dataset.paging.hasNextPage ? true : false;
+    const hasActiveFilters = React.useMemo(
+        () =>
+            Object.keys(filters).some(
+                (k) => !!filters[k] && filters[k].length > 0
+            ),
+        [filters]
+    );
+    const eagerTarget = hasActiveFilters
+        ? FILTERED_EAGER_LOAD_TARGET
+        : EAGER_LOAD_TARGET;
     React.useEffect(() => {
         if (
             !dataset.loading &&
             hasNextPage &&
             allItems.length > 0 &&
-            allItems.length < EAGER_LOAD_TARGET
+            allItems.length < eagerTarget
         ) {
             onLoadMore();
         }
-    }, [allItems.length, dataset.loading, hasNextPage, onLoadMore]);
+    }, [allItems.length, dataset.loading, hasNextPage, eagerTarget, onLoadMore]);
 
     // ---- Filter then group --------------------------------------------------
     const filteredItems = React.useMemo(
@@ -846,6 +1040,34 @@ export const EnrolmentGridComponent: React.FC<IEnrolmentGridComponentProps> = (
     // visualRows derives from the host page size; the outer height is bounded
     // by those rows so the body scrolls instead of the grid growing to fit
     // every loaded record. Measured heights override the estimates when known.
+    //
+    // Height bound: when the host reports no height (MAIN grids report -1),
+    // a tall page-size renders the control taller than the visible page and
+    // the host CLIPS the bottom — hiding the footer and, crucially, the
+    // body's horizontal scrollbar, which made horizontal scrolling appear
+    // broken. We measure the distance from the control's top edge to the
+    // viewport's bottom edge ONCE at mount (not on scroll — resizing a
+    // subgrid while the user scrolls a form would be jarring) and use it as
+    // the height bound. Measurements under 300px are ignored so subgrids
+    // sitting below the fold of a form keep their natural height.
+    const [viewportHeightBound, setViewportHeightBound] = React.useState(0);
+    React.useLayoutEffect(() => {
+        if (height > 0) {
+            return;
+        }
+        const root = rootRef.current;
+        if (!root) {
+            return;
+        }
+        const viewportBottom =
+            document.documentElement.clientHeight || window.innerHeight;
+        const top = root.getBoundingClientRect().top;
+        const available = Math.floor(viewportBottom - top);
+        if (available >= 300) {
+            setViewportHeightBound(available);
+        }
+    }, [height]);
+
     const pageSize =
         dataset.paging && typeof dataset.paging.pageSize === "number"
             ? dataset.paging.pageSize
@@ -856,7 +1078,7 @@ export const EnrolmentGridComponent: React.FC<IEnrolmentGridComponentProps> = (
     const effectiveRowHeight =
         measured && measured.row > 0 ? measured.row : ROW_HEIGHT;
     const effectiveHeight = computeOuterHeight(
-        height,
+        height > 0 ? height : viewportHeightBound,
         visualRows,
         effectiveHeaderHeight,
         effectiveRowHeight
@@ -903,9 +1125,69 @@ export const EnrolmentGridComponent: React.FC<IEnrolmentGridComponentProps> = (
         onLoadMore,
     ]);
 
+    // ---- Container width fallback --------------------------------------------
+    //
+    // The host-reported allocatedWidth is not always usable: subgrid hosts
+    // report the real slot width, but MAIN-grid hosts report -1 or even the
+    // control's own CONTENT width (the sum of all columns). Rendering at
+    // content width means the body never overflows, horizontal scrolling
+    // becomes impossible and the page just clips the grid. So we always
+    // measure the VISIBLE space ourselves: the parent's width capped at the
+    // distance from the grid's left edge to the viewport's right edge (the
+    // parent's own width is untrustworthy, since a shrink-wrapped parent is
+    // sized by us), tracked via ResizeObserver + window resize. The host
+    // width is then clamped to that measurement.
+    const [measuredWidth, setMeasuredWidth] = React.useState(0);
+    React.useLayoutEffect(() => {
+        const root = rootRef.current;
+        const parent = root && root.parentElement;
+        if (!root || !parent) {
+            return;
+        }
+        const update = (): void => {
+            const viewportRight =
+                document.documentElement.clientWidth || window.innerWidth;
+            const left = parent.getBoundingClientRect().left;
+            const visible = Math.floor(viewportRight - left);
+            const parentWidth = parent.clientWidth;
+            const w =
+                parentWidth > 0 && visible > 0
+                    ? Math.min(parentWidth, visible)
+                    : Math.max(parentWidth, visible);
+            if (w > 0) {
+                setMeasuredWidth((prev) => (Math.abs(prev - w) > 1 ? w : prev));
+            }
+        };
+        update();
+        window.addEventListener("resize", update);
+        let observer: ResizeObserver | undefined;
+        if (typeof ResizeObserver !== "undefined") {
+            observer = new ResizeObserver(update);
+            observer.observe(parent);
+        }
+        return () => {
+            window.removeEventListener("resize", update);
+            if (observer) {
+                observer.disconnect();
+            }
+        };
+    }, []);
+
+    // Host width clamped by our own measurement of the visible space.
+    const boundedWidth =
+        width > 0 && measuredWidth > 0
+            ? Math.min(width, measuredWidth)
+            : width > 0
+            ? width
+            : measuredWidth;
+
     // ---- Layout styles ------------------------------------------------------
+    // maxWidth/minWidth guard against flex-layout hosts measuring the grid
+    // at its content width (see the container width fallback above).
     const outerStyle: React.CSSProperties = {
-        width: width > 0 ? width : "100%",
+        width: boundedWidth > 0 ? boundedWidth : "100%",
+        maxWidth: "100%",
+        minWidth: 0,
         height: effectiveHeight,
         backgroundColor: "#ffffff",
         display: "flex",
@@ -947,6 +1229,45 @@ export const EnrolmentGridComponent: React.FC<IEnrolmentGridComponentProps> = (
     const totalCount = resolveTotalCount(dataset, allItems.length);
     const filteredCount = filteredItems.length;
     const rowsLabel = formatRowsLabel(filteredCount, totalCount);
+
+    // TEMPORARY diagnostic readout (right side of the footer): host-reported
+    // vs measured dimensions and the dataset state, so live issues on
+    // main-grid hosts can be diagnosed from a screenshot. Remove once the
+    // main-grid sizing/scrolling behaviour is confirmed stable.
+    const datasetDiag = dataset as unknown as {
+        error?: boolean;
+        errorMessage?: string;
+    };
+    const debugLabel =
+        "dbg w:" +
+        width +
+        " mw:" +
+        measuredWidth +
+        " bw:" +
+        boundedWidth +
+        " h:" +
+        height +
+        " vhb:" +
+        viewportHeightBound +
+        " eh:" +
+        effectiveHeight +
+        " ps:" +
+        pageSize +
+        " cols:" +
+        baseColumns.length +
+        " rows:" +
+        allItems.length +
+        " load:" +
+        String(!!dataset.loading) +
+        (datasetDiag.error
+            ? " ERR:" + String(datasetDiag.errorMessage || "true").slice(0, 120)
+            : "");
+    // Mirror the diagnostics to the console so they are retrievable even
+    // when the footer is clipped out of view.
+    React.useEffect(() => {
+        // eslint-disable-next-line no-console
+        console.debug("EnrolmentGrid " + debugLabel);
+    }, [debugLabel]);
 
     // ---- Empty / loading state ----------------------------------------------
     const isLoadingInitial = dataset.loading && allItems.length === 0;
@@ -1088,7 +1409,12 @@ export const EnrolmentGridComponent: React.FC<IEnrolmentGridComponentProps> = (
                     </React.Fragment>
                 )}
             </div>
-            <div style={footerStyle}>{rowsLabel}</div>
+            <div style={footerStyle}>
+                {rowsLabel}
+                <span style={{ marginLeft: "auto", opacity: 0.65 }}>
+                    {debugLabel}
+                </span>
+            </div>
 
             {/* Header dropdown menu (sort / group / filter / width / move). */}
             {menuState ? (

@@ -28,6 +28,8 @@ import {
     orderVisibleColumns,
     resolveColumnWidth,
     resolveTotalCount,
+    estimateColumnWidth,
+    MAX_AUTO_COLUMN_WIDTH,
 } from "../EnrolmentGrid/gridLogic";
 import { makeDataset } from "./mockDataset";
 
@@ -71,6 +73,52 @@ describe("resolveColumnWidth", () => {
         expect(resolveColumnWidth(0)).toBe(DEFAULT_COLUMN_WIDTH);
         expect(resolveColumnWidth(MIN_COLUMN_WIDTH - 1)).toBe(
             DEFAULT_COLUMN_WIDTH
+        );
+    });
+
+    it("uses the supplied fallback when the view width is unusable", () => {
+        expect(resolveColumnWidth(undefined, 250)).toBe(250);
+        expect(resolveColumnWidth(1, 250)).toBe(250);
+        // A usable view width still wins over the fallback.
+        expect(resolveColumnWidth(200, 250)).toBe(200);
+    });
+});
+
+describe("estimateColumnWidth", () => {
+    it("sizes to the longest cell text, clamped to the auto maximum", () => {
+        const items = [
+            item("r1", { col: "short" }),
+            item("r2", { col: "a noticeably longer cell value" }),
+        ];
+        const w = estimateColumnWidth("Col", items, "col");
+        expect(w).toBeGreaterThan(estimateColumnWidth("Col", [items[0]], "col"));
+        expect(w).toBeLessThanOrEqual(MAX_AUTO_COLUMN_WIDTH);
+    });
+
+    it("never exceeds the auto maximum for very long text", () => {
+        const items = [item("r1", { col: "x".repeat(500) })];
+        expect(estimateColumnWidth("Col", items, "col")).toBe(
+            MAX_AUTO_COLUMN_WIDTH
+        );
+    });
+
+    it("never drops below the minimum for empty content", () => {
+        expect(
+            estimateColumnWidth("", [item("r1", { col: "" })], "col")
+        ).toBe(MIN_COLUMN_WIDTH);
+    });
+
+    it("uses the header label when it is longer than every cell", () => {
+        const items = [item("r1", { col: "ab" })];
+        expect(
+            estimateColumnWidth("A Rather Long Header", items, "col")
+        ).toBeGreaterThan(estimateColumnWidth("Hdr", items, "col"));
+    });
+
+    it("adds the extra pixel allowance (external link icon)", () => {
+        const items = [item("r1", { col: "some value" })];
+        expect(estimateColumnWidth("Col", items, "col", 28)).toBe(
+            estimateColumnWidth("Col", items, "col") + 28
         );
     });
 });
@@ -358,8 +406,18 @@ describe("computeOuterHeight", () => {
         expect(computeOuterHeight(0, 4, 42, 42)).toBe(expected);
     });
 
-    it("never exceeds a positive host-allocated height", () => {
-        expect(computeOuterHeight(100, 25, 42, 42)).toBe(100);
+    it("snaps down to a whole-row height within the host allocation", () => {
+        const chrome = 42 + HORIZONTAL_SCROLLBAR_HEIGHT + FOOTER_HEIGHT;
+        // Allocation fits 7 full rows plus a 30px sliver of the 8th:
+        // the sliver is dropped so the body ends on a row boundary.
+        expect(computeOuterHeight(chrome + 7 * 42 + 30, 25, 42, 42)).toBe(
+            chrome + 7 * 42
+        );
+    });
+
+    it("keeps at least one row even when the allocation is tiny", () => {
+        const chrome = 42 + HORIZONTAL_SCROLLBAR_HEIGHT + FOOTER_HEIGHT;
+        expect(computeOuterHeight(100, 25, 42, 42)).toBe(chrome + 42);
     });
 
     it("uses measured row/header heights when supplied", () => {

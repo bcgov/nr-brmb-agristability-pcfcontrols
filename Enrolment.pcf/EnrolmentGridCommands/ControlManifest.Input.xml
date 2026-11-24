@@ -28,21 +28,24 @@
   <control
     namespace="BRMB"
     constructor="EnrolmentGridCommands"
-    version="1.0.5"
+    version="1.0.12"
     display-name-key="EnrolmentGridCommands_Display"
     description-key="EnrolmentGridCommands_Description"
     control-type="virtual">
 
     <!--
       Dataset binding. displayCommandBar:true keeps the subgrid command
-      bar (including custom ribbon buttons) visible; the view selector
-      stays hidden to match the EnrolmentGrid variant.
+      bar (including custom ribbon buttons) visible. displayViewSelector
+      must be true because this control is also used on entity MAIN
+      grids, where false removes the view-switch dropdown entirely; on
+      subgrids the form designer's own view-selector setting still
+      decides whether a selector is shown.
     -->
     <data-set
       name="dataset"
       display-name-key="Dataset_Display"
       description-key="Dataset_Description"
-      cds-data-set-options="displayCommandBar:true;displayViewSelector:false">
+      cds-data-set-options="displayCommandBar:true;displayViewSelector:true">
     </data-set>
 
     <resources>

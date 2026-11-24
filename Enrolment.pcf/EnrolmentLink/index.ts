@@ -169,13 +169,23 @@ export class EnrolmentLink
             const raw = this.context.parameters.enrolment.raw;
             const current = raw && raw.length > 0 ? raw[0] : undefined;
             const entityType = current?.entityType || ENROLMENT_ENTITY;
-            const results = await this.context.utils.lookupObjects({
+            // allowCreateNew hides the dialog's "+ New" button: enrolments
+            // are created by automated processes only, and the button would
+            // open the retired Dataverse form. It is not part of the
+            // documented LookupOptions type (hence the cast) but is honoured
+            // by the unified client's lookup dialog; if a future client
+            // ignores it the button simply reappears - nothing breaks.
+            const lookupOptions = {
                 allowMultiSelect: false,
                 defaultEntityType: entityType,
                 defaultViewId: "",
                 entityTypes: [entityType],
                 viewIds: [],
-            });
+                allowCreateNew: false,
+            } as ComponentFramework.UtilityApi.LookupOptions;
+            const results = await this.context.utils.lookupObjects(
+                lookupOptions
+            );
             if (results && results.length > 0 && results[0]) {
                 this.outputValue = [results[0]];
                 this.notifyOutputChanged();

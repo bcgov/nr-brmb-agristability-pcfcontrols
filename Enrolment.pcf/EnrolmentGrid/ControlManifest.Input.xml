@@ -16,7 +16,7 @@
   <control
     namespace="BRMB"
     constructor="EnrolmentGrid"
-    version="1.0.7"
+    version="1.0.14"
     display-name-key="EnrolmentGrid_Display"
     description-key="EnrolmentGrid_Description"
     control-type="virtual">
