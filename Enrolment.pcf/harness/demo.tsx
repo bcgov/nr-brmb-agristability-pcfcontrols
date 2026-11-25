@@ -114,6 +114,60 @@ const BASE: MockRecordSpec[] = [
     { id: "r14", formatted: { account: "Tyrell Corporation",  contact: "Milan Peeters",   city: "Antwerpen", segment: "Mid-market", status: "Active",   revenue: "€ 1.9M" }, raw: { account: acct("a14", "Tyrell Corporation"), contact: cont("c14", "Milan Peeters") } },
 ];
 
+// ---------------------------------------------------------------------------
+// ?wide=1 dataset: many columns (total width far beyond the 900px host) plus
+// an "enrolment" lookup column that targets the external code-app entity
+// with long display names. visualSizeFactor is 1 on every column to
+// simulate the MAIN-grid host, which reports useless view widths — the
+// control must fall back to content-based column sizing and keep the body
+// horizontally scrollable.
+// ---------------------------------------------------------------------------
+const ENROLMENT_ENTITY = "vsi_participantprogramyear";
+
+const WIDE_COLUMNS: MockColumn[] = [
+    { name: "batch", displayName: "BatchNumber", order: 0, dataType: "SingleLine.Text", visualSizeFactor: 1 },
+    { name: "pin", displayName: "PIN", order: 1, dataType: "SingleLine.Text", visualSizeFactor: 1 },
+    { name: "year", displayName: "Program Year", order: 2, dataType: "SingleLine.Text", visualSizeFactor: 1 },
+    { name: "processing", displayName: "Processing Status", order: 3, dataType: "SingleLine.Text", visualSizeFactor: 1 },
+    { name: "enrolment", displayName: "Enrolment", order: 4, dataType: "Lookup.Simple", visualSizeFactor: 1 },
+    { name: "account", displayName: "Account", order: 5, dataType: "Lookup.Simple", visualSizeFactor: 1 },
+    { name: "city", displayName: "City", order: 6, dataType: "SingleLine.Text", visualSizeFactor: 1 },
+    { name: "segment", displayName: "Segment", order: 7, dataType: "SingleLine.Text", visualSizeFactor: 1 },
+    { name: "status", displayName: "Status", order: 8, dataType: "SingleLine.Text", visualSizeFactor: 1 },
+    { name: "revenue", displayName: "Revenue", order: 9, dataType: "SingleLine.Text", visualSizeFactor: 1 },
+    { name: "owner", displayName: "Owner", order: 10, dataType: "SingleLine.Text", visualSizeFactor: 1 },
+    { name: "created", displayName: "Created On", order: 11, dataType: "SingleLine.Text", visualSizeFactor: 1 },
+];
+
+function enr(id: string, name: string) {
+    return ref(ENROLMENT_ENTITY, id, name);
+}
+
+const WIDE_BASE: MockRecordSpec[] = BASE.map((r, i) => ({
+    id: r.id,
+    formatted: {
+        batch: String(159649 + i),
+        pin: String(98765671 - i * 7),
+        year: String(2023 + (i % 5)),
+        processing: "Successful",
+        enrolment: 2023 + (i % 5) + " ENROLMENT NOTICE INVOICE " + (3684453 + i),
+        account: r.formatted.account,
+        city: r.formatted.city,
+        segment: r.formatted.segment,
+        status: r.formatted.status,
+        revenue: r.formatted.revenue,
+        owner: "AFF BRMB Claims",
+        created: "2026-11-0" + ((i % 9) + 1),
+    },
+    raw: {
+        enrolment: enr(
+            "e" + i,
+            2023 + (i % 5) + " ENROLMENT NOTICE INVOICE " + (3684453 + i)
+        ),
+        account: r.raw ? r.raw.account : undefined,
+    },
+}));
+
 const DemoApp: React.FC = () => {
     const [sort, setSort] = React.useState<{ name: string | null; desc: boolean }>({
         name: null,
@@ -122,39 +176,45 @@ const DemoApp: React.FC = () => {
 
     // ?selection=1 renders the command-bar variant's configuration
     // (row selection + checkboxes), for debugging alignment and selection
-    // without a Dataverse environment.
-    const enableSelection = React.useMemo(
-        () => new URLSearchParams(window.location.search).get("selection") === "1",
+    // without a Dataverse environment. ?wide=1 swaps in the wide dataset
+    // (12 columns + an external-entity enrolment lookup) for debugging
+    // horizontal overflow on main grids.
+    const params = React.useMemo(
+        () => new URLSearchParams(window.location.search),
         []
     );
+    const enableSelection = params.get("selection") === "1";
+    const wide = params.get("wide") === "1";
+    const activeColumns = wide ? WIDE_COLUMNS : COLUMNS;
+    const activeBase = wide ? WIDE_BASE : BASE;
 
     // Re-sort the mock records when the user picks a sort, mimicking the
     // server-side refresh the real control triggers via index.ts.
     const records = React.useMemo(() => {
         if (!sort.name) {
-            return BASE;
+            return activeBase;
         }
         const key = sort.name;
-        const sorted = BASE.slice().sort((a, b) => {
+        const sorted = activeBase.slice().sort((a, b) => {
             const av = a.formatted[key] || "";
             const bv = b.formatted[key] || "";
             return av.localeCompare(bv, undefined, { numeric: true });
         });
         return sort.desc ? sorted.reverse() : sorted;
-    }, [sort]);
+    }, [sort, activeBase]);
 
     const dataset = React.useMemo(
         () =>
             makeDataset({
-                columns: COLUMNS,
+                columns: activeColumns,
                 records,
                 targetEntity: "account",
-                paging: { pageSize: 100, totalResultCount: BASE.length, hasNextPage: false },
+                paging: { pageSize: 100, totalResultCount: activeBase.length, hasNextPage: false },
                 sorting: sort.name
                     ? [{ name: sort.name, sortDirection: sort.desc ? 1 : 0 }]
                     : [],
             }),
-        [records, sort]
+        [records, sort, activeColumns, activeBase]
     );
 
     return (
@@ -173,6 +233,8 @@ const DemoApp: React.FC = () => {
                         onSort={(name, desc) => setSort({ name, desc })}
                         enableSelection={enableSelection}
                         onSelectionChanged={() => undefined}
+                        externalLinkEntity={wide ? ENROLMENT_ENTITY : undefined}
+                        externalLinkTooltip="Open enrolment app at this enrolment"
                     />
                 </div>
             </div>

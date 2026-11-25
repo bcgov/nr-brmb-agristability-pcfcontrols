@@ -25,10 +25,10 @@ dotnet build Solution.cdsproj -c Release
 
 Notes:
 
-- The zip is **unmanaged** by default. For a managed zip (test/prod ALM),
-  uncomment `<SolutionPackageType>Both</SolutionPackageType>` in
-  `Solution.cdsproj` and rebuild — you get `Solution.zip` +
-  `Solution_managed.zip`.
+- The zip is **managed** (`<SolutionPackageType>Managed</SolutionPackageType>`
+  in `Solution.cdsproj`), matching how the Enrolment solution is deployed
+  (it exists as managed in dev). Change the package type only if a target
+  environment needs an unmanaged copy.
 - Do not add an explicit `outDir` to `pcfconfig.json`: the PowerApps
   MSBuild pipeline passes its own and errors with `pcf-1007` if they
   conflict.
@@ -54,20 +54,29 @@ Notes:
 
 ## 4. Updates to an environment that already has the controls
 
+> **Do not use `pac pcf push` with this project.** It only supports
+> single-control projects and fails here with *"Found more than one
+> project source file named 'ControlManifest.Input.xml'"* because
+> `Enrolment.pcfproj` packages three controls. Deploy updates by
+> rebuilding and re-importing the solution zip instead:
+
 ```bash
 cd Enrolment.pcf
-pac auth select --index <n>        # or: pac org select --environment <url>
-pac pcf push --publisher-prefix vsi --solution-unique-name Enrolment
+npm run build                      # rebuild the control bundles
+cd Solution
+dotnet build Solution.cdsproj -c Release
+pac solution import --path bin/Release/Solution.zip \
+    --environment <environment-url> --publish-changes
 ```
 
-- Controls are matched by logical name, so push upgrades them in place on
-  every form already using them.
+- Controls are matched by logical name, so the import upgrades them in
+  place on every form already using them.
 - **Bump the `version=` in each changed control's
-  `ControlManifest.Input.xml` before pushing** — the model-driven client
-  caches control bundles and the version bump is what busts the cache.
-- `pac pcf push` always imports **unmanaged**. Keep one model per
-  environment chain: all-unmanaged pushes, or managed solution upgrades —
-  don't layer pushes over a managed import.
+  `ControlManifest.Input.xml` before importing** — the model-driven
+  client caches control bundles and the version bump is what busts the
+  cache.
+- Also bump `<Version>` in `Solution/src/Other/Solution.xml` so the
+  import registers as an upgrade of the managed solution.
 
 ## 5. One-time cleanup (dev)
 

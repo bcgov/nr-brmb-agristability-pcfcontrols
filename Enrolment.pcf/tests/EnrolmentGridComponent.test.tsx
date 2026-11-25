@@ -257,6 +257,47 @@ describe("EnrolmentGridComponent", () => {
             expect(onOpenRecord).toHaveBeenCalledWith("contact", "c1");
         });
 
+        it("puts the -external modifier only on links to the external entity", () => {
+            const { container } = renderGrid({
+                enableSelection: true,
+                // Rows are "account"; the contact lookup targets the
+                // external entity, so only that link skips the underline.
+                externalLinkEntity: "contact",
+            });
+            const links = Array.from(
+                container.querySelectorAll(".brmb-enrolment-grid-link")
+            );
+            const primaryLink = links.find(
+                (l) => l.textContent === "Acme"
+            ) as HTMLElement;
+            const lookupLink = links.find(
+                (l) => l.textContent === "Jane Doe"
+            ) as HTMLElement;
+            expect(primaryLink.classList).not.toContain(
+                "brmb-enrolment-grid-link-external"
+            );
+            expect(lookupLink.classList).toContain(
+                "brmb-enrolment-grid-link-external"
+            );
+        });
+
+        it("puts the -external modifier on first-column links of external rows", () => {
+            const { container } = renderGrid({
+                enableSelection: true,
+                // Rows themselves are the external entity here.
+                externalLinkEntity: "account",
+            });
+            const links = Array.from(
+                container.querySelectorAll(".brmb-enrolment-grid-link")
+            );
+            const primaryLink = links.find(
+                (l) => l.textContent === "Acme"
+            ) as HTMLElement;
+            expect(primaryLink.classList).toContain(
+                "brmb-enrolment-grid-link-external"
+            );
+        });
+
         it("renders row checkboxes and a select-all that selects every row", () => {
             const { container, onSelectionChanged } = renderGrid({
                 enableSelection: true,
